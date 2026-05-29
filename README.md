@@ -42,6 +42,12 @@ python3 -m http.server 3000 -d frontend
 ```
 
 ---
+## 📸 Hardware Photos
+
+| FRONTEND | BACKEND |
+|-------------------------------|------------------------|
+| ![Wiring](assets/wiring.png) | ![Module](assets/module.png) |
+
 
 ## URLs
 
