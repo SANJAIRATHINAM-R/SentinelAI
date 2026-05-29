@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SentinelAI — SOC Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg0:#090b0f;--bg1:#0e1117;--bg2:#141921;--bg3:#1a2030;--border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.11);--text:#dde1ea;--text2:#7a8090;--text3:#454d5e;--red:#e84545;--red-dim:rgba(232,69,69,0.12);--orange:#f0903a;--orange-dim:rgba(240,144,58,0.12);--blue:#4a9eff;--blue-dim:rgba(74,158,255,0.1);--green:#3dd68c;--green-dim:rgba(61,214,140,0.1);--yellow:#f0d060;--yellow-dim:rgba(240,208,96,0.1);--cyan:#22d3ee}
+html,body{background:var(--bg0);color:var(--text);font-family:'SF Mono',Consolas,'Courier New',monospace;font-size:13px;min-height:100vh;overflow-x:hidden}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:48px;background:var(--bg1);border-bottom:1px solid var(--border2)}
+.logo{font-size:15px;font-weight:700;letter-spacing:.08em;color:#fff}.logo span{color:var(--red)}
+.ws-dot{width:7px;height:7px;border-radius:50%;background:var(--green)}.ws-dot.off{background:var(--red)}
+.layout{display:grid;grid-template-columns:200px 1fr;min-height:calc(100vh - 48px)}
+.sidebar{background:var(--bg1);border-right:1px solid var(--border);padding:16px 0}
+.nav{display:flex;align-items:center;gap:10px;padding:9px 18px;cursor:pointer;color:var(--text2);transition:.15s;border-left:2px solid transparent;font-size:12px}
+.nav:hover{color:var(--text);background:var(--bg2)}.nav.active{color:var(--blue);border-left-color:var(--blue);background:var(--blue-dim)}
+.main{padding:18px;overflow-y:auto}
+.page{display:none}.page.on{display:block}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.stat{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;border-top:2px solid}
+.stat.r{border-top-color:var(--red)}.stat.o{border-top-color:var(--orange)}.stat.b{border-top-color:var(--blue)}.stat.g{border-top-color:var(--green)}
+.stat-lbl{font-size:10px;color:var(--text2);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.stat-n{font-size:26px;font-weight:700}.stat-n.r{color:var(--red)}.stat-n.o{color:var(--orange)}.stat-n.b{color:var(--blue)}.stat-n.g{color:var(--green)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.ph{display:flex;align-items:center;justify-content:space-between;padding:9px 13px;border-bottom:1px solid var(--border);font-size:11px;letter-spacing:.04em;color:var(--text2)}
+.ph strong{color:var(--text);font-size:12px}
+.pb{padding:10px 13px;max-height:300px;overflow-y:auto}
+.inc{display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);animation:fi .4s ease}
+.inc:last-child{border-bottom:none}
+@keyframes fi{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+.badge{padding:2px 6px;border-radius:3px;font-size:10px;font-weight:700;flex-shrink:0;margin-top:1px}
+.badge.CRITICAL{background:var(--red-dim);color:var(--red);border:1px solid var(--red)}
+.badge.HIGH{background:var(--orange-dim);color:var(--orange);border:1px solid var(--orange)}
+.badge.MEDIUM{background:var(--yellow-dim);color:var(--yellow);border:1px solid var(--yellow)}
+.badge.LOW{background:var(--blue-dim);color:var(--blue);border:1px solid var(--blue)}
+.inc-body{flex:1;min-width:0}
+.inc-title{color:var(--text);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.inc-meta{color:var(--text2);font-size:10px;margin-top:2px}
+.act-tag{display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;background:var(--bg3);color:var(--text2);border:1px solid var(--border2);margin:1px 2px 1px 0}
+.log-line{font-size:11px;line-height:1.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;animation:fi .3s ease}
+.log-line.CRITICAL{color:var(--red)}.log-line.HIGH{color:var(--orange)}.log-line.MEDIUM{color:var(--yellow)}.log-line.LOW{color:var(--text2)}
+.ts{color:var(--text3);margin-right:5px}.hst{color:var(--cyan);margin-right:5px}
+.cw{padding:12px;height:200px;position:relative}
+.sbar{display:flex;align-items:center;gap:18px;padding:5px 18px;background:var(--bg1);border-top:1px solid var(--border);font-size:10px;color:var(--text3)}
+.sdot{width:5px;height:5px;border-radius:50%;background:var(--green)}.sdot.warn{background:var(--yellow)}
+.srow{display:flex;gap:8px;margin-bottom:5px;font-size:12px}
+.sk{color:var(--text2);min-width:120px;flex-shrink:0}.sv{color:var(--text)}
+.sv.r{color:var(--red)}.sv.o{color:var(--orange)}.sv.g{color:var(--green)}
+.mbar{display:inline-block;padding:2px 7px;border-radius:3px;background:var(--blue-dim);color:var(--blue);border:1px solid var(--blue);font-size:11px}
+.sbar2{display:flex;gap:8px;margin-bottom:12px}
+.sbar2 input{flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:6px 9px;border-radius:4px;font-family:inherit;font-size:12px;outline:none}
+.sbar2 input:focus{border-color:var(--blue)}
+.sbar2 select{background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:5px 7px;border-radius:4px;font-family:inherit;font-size:12px}
+.btn{padding:6px 12px;border-radius:4px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-family:inherit;font-size:11px;cursor:pointer}
+.btn:hover{border-color:var(--blue);color:var(--blue)}.btn.d{border-color:var(--red);color:var(--red)}.btn.d:hover{background:var(--red-dim)}
+.ip-tag{display:inline-block;padding:2px 7px;border-radius:3px;background:var(--red-dim);color:var(--red);border:1px solid var(--red);font-size:11px;margin:2px}
+.ssel{background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:3px 7px;border-radius:4px;font-family:inherit;font-size:11px;cursor:pointer}
+.intel-box{background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:12px;margin-top:8px;font-size:12px}
+.intel-box.malicious{border-color:var(--red)}.intel-box.suspicious{border-color:var(--orange)}.intel-box.clean{border-color:var(--green)}
+@media(max-width:800px){.layout{grid-template-columns:1fr}.sidebar{display:none}.stat-grid{grid-template-columns:1fr 1fr}.row2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="logo">SENTINEL<span>AI</span> &nbsp;·&nbsp; <span style="font-size:11px;color:var(--text2);font-weight:400">SOC Platform</span></div>
+  <div style="display:flex;align-items:center;gap:18px">
+    <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)">
+      <div class="ws-dot off" id="wsdot"></div><span id="wslabel">Connecting…</span>
+    </div>
+    <div style="color:var(--text2);font-size:11px" id="clock"></div>
+  </div>
+</div>
+
+<div class="layout">
+<div class="sidebar">
+  <div class="nav active" onclick="go('dash',this)">◈&nbsp;&nbsp;Dashboard</div>
+  <div class="nav" onclick="go('inc',this)">⚡&nbsp;&nbsp;Incidents</div>
+  <div class="nav" onclick="go('logs',this)">≡&nbsp;&nbsp;Live Logs</div>
+  <div class="nav" onclick="go('intel',this)">◎&nbsp;&nbsp;Threat Intel</div>
+  <div class="nav" onclick="go('block',this)">⊘&nbsp;&nbsp;Blocked IPs</div>
+  <div style="margin:14px 18px 6px;font-size:10px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase">Services</div>
+  <div class="nav" style="pointer-events:none;opacity:.7"><span style="color:var(--green)">●</span>&nbsp;&nbsp;Backend API</div>
+  <div class="nav" style="pointer-events:none;opacity:.7"><span style="color:var(--green)">●</span>&nbsp;&nbsp;Detection Engine</div>
+  <div class="nav" style="pointer-events:none;opacity:.7"><span style="color:var(--yellow)">●</span>&nbsp;&nbsp;Kafka (demo)</div>
+  <div class="nav" style="pointer-events:none;opacity:.7"><span style="color:var(--green)">●</span>&nbsp;&nbsp;Response Engine</div>
+</div>
+
+<div class="main">
+
+<!-- DASHBOARD -->
+<div id="page-dash" class="page on">
+  <div class="stat-grid">
+    <div class="stat r"><div class="stat-lbl">Total Threats</div><div class="stat-n r" id="s-total">0</div></div>
+    <div class="stat o"><div class="stat-lbl">Critical</div><div class="stat-n o" id="s-crit">0</div></div>
+    <div class="stat b"><div class="stat-lbl">Blocked IPs</div><div class="stat-n b" id="s-blk">0</div></div>
+    <div class="stat g"><div class="stat-lbl">Hosts Monitored</div><div class="stat-n g" id="s-hosts">5</div></div>
+  </div>
+  <div class="row2">
+    <div class="panel">
+      <div class="ph"><strong>Live Incident Feed</strong><span id="feed-count">0</span></div>
+      <div class="pb" id="feed"></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><strong>Attack Distribution</strong><span>last 50</span></div>
+      <div class="cw"><canvas id="attack-chart"></canvas></div>
+    </div>
+  </div>
+  <div class="row2">
+    <div class="panel">
+      <div class="ph"><strong>Live Log Stream</strong><span id="log-cnt">0</span></div>
+      <div class="pb" id="log-stream" style="max-height:220px"></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><strong>MITRE ATT&amp;CK Coverage</strong><span>active</span></div>
+      <div class="pb" id="mitre" style="max-height:220px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- INCIDENTS -->
+<div id="page-inc" class="page">
+  <div class="sbar2">
+    <input type="text" id="isearch" placeholder="Search incidents…" oninput="renderTable()">
+    <select id="isev" onchange="renderTable()"><option value="">All severities</option><option>CRITICAL</option><option>HIGH</option><option>MEDIUM</option><option>LOW</option></select>
+    <select id="istat" onchange="renderTable()"><option value="">All statuses</option><option>Open</option><option>Investigating</option><option>Contained</option><option>Resolved</option></select>
+  </div>
+  <div id="inc-table"></div>
+  <div id="inc-detail" style="display:none;margin-top:14px" class="panel">
+    <div class="ph"><strong id="det-title">Detail</strong><span onclick="closeD()" style="cursor:pointer;color:var(--red)">✕ close</span></div>
+    <div class="pb" id="det-body"></div>
+  </div>
+</div>
+
+<!-- LOGS -->
+<div id="page-logs" class="page">
+  <div class="sbar2">
+    <input type="text" id="lsearch" placeholder="Filter logs…" oninput="renderLogPage()">
+    <select id="lsev" onchange="renderLogPage()"><option value="">All levels</option><option>CRITICAL</option><option>HIGH</option><option>MEDIUM</option><option>LOW</option></select>
+  </div>
+  <div class="panel"><div class="ph"><strong>Full Log Stream</strong><span>real-time</span></div>
+  <div class="pb" id="log-page" style="max-height:560px;font-size:11px"></div></div>
+</div>
+
+<!-- INTEL -->
+<div id="page-intel" class="page">
+  <div class="sbar2">
+    <input type="text" id="intel-ip" placeholder="IP address to check…">
+    <button class="btn" onclick="lookupIP()">Lookup</button>
+  </div>
+  <div id="intel-res"></div>
+  <div style="margin-top:18px" class="panel">
+    <div class="ph"><strong>API Keys</strong><span>configure in .env</span></div>
+    <div class="pb">
+      <div class="srow"><div class="sk">VirusTotal</div><div class="sv o">Add VIRUSTOTAL_KEY to .env</div></div>
+      <div class="srow"><div class="sk">AbuseIPDB</div><div class="sv o">Add ABUSEIPDB_KEY to .env</div></div>
+      <div class="srow"><div class="sk">AlienVault OTX</div><div class="sv o">Add OTX_KEY to .env</div></div>
+      <div class="srow"><div class="sk">API Docs</div><div class="sv"><a href="http://localhost:8000/docs" target="_blank" style="color:var(--blue)">localhost:8000/docs ↗</a></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- BLOCKED -->
+<div id="page-block" class="page">
+  <div class="sbar2">
+    <input type="text" id="blk-ip" placeholder="IP to block manually…">
+    <button class="btn d" onclick="blkManual()">Block IP</button>
+  </div>
+  <div class="panel"><div class="ph"><strong>Blocked IPs</strong><span id="blk-count">0</span></div>
+  <div class="pb" id="blk-list"></div></div>
+</div>
+
+</div></div>
+
+<div class="sbar">
+  <div style="display:flex;align-items:center;gap:5px"><div class="sdot"></div>Detection</div>
+  <div style="display:flex;align-items:center;gap:5px"><div class="sdot"></div>Response Engine</div>
+  <div style="display:flex;align-items:center;gap:5px"><div class="sdot warn"></div>Kafka (demo)</div>
+  <div style="display:flex;align-items:center;gap:5px"><div class="sdot"></div>WebSocket</div>
+  <div style="margin-left:auto" id="ev-cnt">0 events</div>
+</div>
+
+<script>
+const API=`http://${location.hostname}:8000`,WS=`ws://${location.hostname}:8000/ws`;
+let incidents=[],logs=[],blocked=new Set(),evCnt=0,chart=null;
+
+setInterval(()=>document.getElementById('clock').textContent=new Date().toUTCString().slice(5,25)+' UTC',1000);
+
+// WebSocket
+function connect(){
+  const ws=new WebSocket(WS);
+  ws.onopen=()=>{document.getElementById('wsdot').className='ws-dot';document.getElementById('wslabel').textContent='Live'};
+  ws.onclose=()=>{document.getElementById('wsdot').className='ws-dot off';document.getElementById('wslabel').textContent='Reconnecting…';setTimeout(connect,3000)};
+  ws.onmessage=e=>{
+    const m=JSON.parse(e.data);evCnt++;
+    document.getElementById('ev-cnt').textContent=evCnt.toLocaleString()+' events';
+    if(m.type==='init'){incidents=m.incidents||[];logs=m.logs||[];updStats(m.stats||{});renderFeed();renderChart();renderMitre();renderLogStream()}
+    else if(m.type==='incident'){incidents.unshift(m.data);if(incidents.length>200)incidents.pop();renderFeed();renderChart();renderMitre();renderTable()}
+    else if(m.type==='log'){logs.unshift(m.data);if(logs.length>500)logs.pop();renderLogStream();renderLogPage();document.getElementById('log-cnt').textContent=logs.length}
+    else if(m.type==='stats')updStats(m.data);
+  };
+}
+
+function updStats(s){
+  document.getElementById('s-total').textContent=s.total_threats||0;
+  document.getElementById('s-crit').textContent=s.critical||0;
+  document.getElementById('s-blk').textContent=s.blocked_ips||0;
+  document.getElementById('s-hosts').textContent=s.monitored_hosts||5;
+}
+
+function renderFeed(){
+  document.getElementById('feed').innerHTML=incidents.slice(0,20).map(i=>`
+    <div class="inc">
+      <div class="badge ${i.severity}">${i.severity}</div>
+      <div class="inc-body">
+        <div class="inc-title">${i.attack_type} — ${i.target_host}</div>
+        <div class="inc-meta">src: ${i.source_ip} · ${i.timestamp.slice(11,19)} UTC · ${i.mitre_tactic}</div>
+        <div style="margin-top:3px">${(i.response_actions||[]).map(a=>`<span class="act-tag">✓ ${a}</span>`).join('')}</div>
+      </div>
+    </div>`).join('');
+  document.getElementById('feed-count').textContent=incidents.length;
+}
+
+function renderChart(){
+  const c={};incidents.slice(0,50).forEach(i=>c[i.attack_type]=(c[i.attack_type]||0)+1);
+  const labels=Object.keys(c),data=Object.values(c);
+  const colors=['#e84545','#f0903a','#4a9eff','#3dd68c','#f0d060','#a78bfa','#22d3ee','#ff6b9d','#7fdbca'];
+  if(!chart){
+    const ctx=document.getElementById('attack-chart').getContext('2d');
+    chart=new Chart(ctx,{type:'bar',data:{labels,datasets:[{data,backgroundColor:labels.map((_,i)=>colors[i%9]),borderRadius:3,borderWidth:0}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+        scales:{x:{ticks:{color:'#7a8090',font:{size:9}},grid:{display:false}},y:{ticks:{color:'#7a8090',font:{size:9}},grid:{color:'rgba(255,255,255,0.04)'}}}}});
+  } else {chart.data.labels=labels;chart.data.datasets[0].data=data;chart.data.datasets[0].backgroundColor=labels.map((_,i)=>colors[i%9]);chart.update('none')}
+}
+
+function renderMitre(){
+  const t={};incidents.forEach(i=>{if(i.mitre_tactic)t[i.mitre_tactic]=(t[i.mitre_tactic]||0)+1});
+  const sorted=Object.entries(t).sort((a,b)=>b[1]-a[1]);
+  document.getElementById('mitre').innerHTML=sorted.map(([k,v])=>{
+    const pct=Math.min(100,Math.round(v/Math.max(incidents.length,1)*100*5));
+    const col=v>5?'var(--red)':v>2?'var(--orange)':'var(--blue)';
+    return `<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;margin-bottom:3px;font-size:11px"><span style="color:var(--text)">${k}</span><span style="color:${col}">${v}</span></div><div style="background:var(--bg3);border-radius:2px;height:3px"><div style="background:${col};height:3px;border-radius:2px;width:${pct}%;transition:width .4s"></div></div></div>`;
+  }).join('')||'<div style="color:var(--text3)">Waiting for data…</div>';
+}
+
+function renderLogStream(){
+  document.getElementById('log-stream').innerHTML=logs.slice(0,60).map(l=>
+    `<div class="log-line ${l.level}"><span class="ts">${l.timestamp}</span><span class="hst">${l.host}</span>${l.message}</div>`).join('');
+}
+
+function renderLogPage(){
+  const q=(document.getElementById('lsearch')||{}).value||'';
+  const sv=(document.getElementById('lsev')||{}).value||'';
+  let f=logs;
+  if(q)f=f.filter(l=>l.message.includes(q)||l.host.includes(q));
+  if(sv)f=f.filter(l=>l.level===sv);
+  document.getElementById('log-page').innerHTML=f.slice(0,200).map(l=>
+    `<div class="log-line ${l.level}"><span class="ts">${l.timestamp}</span><span class="hst">${l.host}</span>${l.message}</div>`).join('');
+}
+
+function renderTable(){
+  const q=(document.getElementById('isearch')||{}).value||'';
+  const sv=(document.getElementById('isev')||{}).value||'';
+  const st=(document.getElementById('istat')||{}).value||'';
+  let list=incidents;
+  if(q)list=list.filter(i=>JSON.stringify(i).toLowerCase().includes(q.toLowerCase()));
+  if(sv)list=list.filter(i=>i.severity===sv);
+  if(st)list=list.filter(i=>i.status===st);
+  document.getElementById('inc-table').innerHTML=`
+    <div class="panel"><div class="ph"><strong>Incidents</strong><span>${list.length}</span></div><div class="pb" style="max-height:420px">
+    ${list.slice(0,100).map(i=>`
+      <div class="inc" onclick="showDet(${i.id})" style="cursor:pointer">
+        <div class="badge ${i.severity}">${i.severity}</div>
+        <div class="inc-body">
+          <div class="inc-title">${i.attack_type} — ${i.target_host} <span style="float:right;font-size:10px;color:var(--text3)">#${i.id}</span></div>
+          <div class="inc-meta">src: ${i.source_ip} · ${i.timestamp.slice(11,19)} · ${i.status} · ${i.mitre_tactic}</div>
+        </div>
+      </div>`).join('')||'<div style="color:var(--text3);padding:14px">No results</div>'}
+    </div></div>`;
+}
+
+function showDet(id){
+  const i=incidents.find(x=>x.id===id);if(!i)return;
+  document.getElementById('det-title').textContent=`#${i.id} — ${i.attack_type}`;
+  const sc={CRITICAL:'r',HIGH:'o',MEDIUM:'',LOW:'g'}[i.severity]||'';
+  document.getElementById('det-body').innerHTML=`
+    <div class="srow"><div class="sk">Severity</div><div class="sv ${sc}">${i.severity}</div></div>
+    <div class="srow"><div class="sk">Attack type</div><div class="sv">${i.attack_type}</div></div>
+    <div class="srow"><div class="sk">Source IP</div><div class="sv">${i.source_ip}</div></div>
+    <div class="srow"><div class="sk">Target host</div><div class="sv">${i.target_host}</div></div>
+    <div class="srow"><div class="sk">MITRE tactic</div><div class="sv"><span class="mbar">${i.mitre_tactic}</span></div></div>
+    <div class="srow"><div class="sk">Timestamp</div><div class="sv">${i.timestamp}</div></div>
+    <div class="srow"><div class="sk">Details</div><div class="sv">${i.details}</div></div>
+    <div class="srow"><div class="sk">Status</div><div class="sv">
+      <select class="ssel" onchange="updStatus(${i.id},this.value)">
+        ${['Open','Investigating','Contained','Resolved'].map(s=>`<option ${s===i.status?'selected':''}>${s}</option>`).join('')}
+      </select>
+    </div></div>
+    <div style="margin-top:10px;font-size:10px;color:var(--text2);letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px">Response Actions</div>
+    ${(i.response_actions||[]).map(a=>`<div style="display:flex;gap:6px;margin-bottom:3px;font-size:12px"><span style="color:var(--green)">✓</span>${a}</div>`).join('')}
+    <div style="margin-top:10px;display:flex;gap:8px">
+      <button class="btn d" onclick="blkIP('${i.source_ip}')">Block ${i.source_ip}</button>
+      <button class="btn" onclick="intelFrom('${i.source_ip}')">Threat intel →</button>
+    </div>`;
+  document.getElementById('inc-detail').style.display='block';
+}
+function closeD(){document.getElementById('inc-detail').style.display='none'}
+
+async function updStatus(id,status){
+  await fetch(`${API}/api/incidents/${id}/status`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});
+  const i=incidents.find(x=>x.id===id);if(i)i.status=status;
+}
+
+async function lookupIP(){
+  const ip=document.getElementById('intel-ip').value||'';if(!ip)return;
+  const r=await fetch(`${API}/api/threat-intel/${ip}`).then(r=>r.json());
+  const col={malicious:'r',suspicious:'o',clean:'g'}[r.reputation]||'b';
+  const colv={malicious:'var(--red)',suspicious:'var(--orange)',clean:'var(--green)'}[r.reputation]||'var(--blue)';
+  document.getElementById('intel-res').innerHTML=`
+    <div class="intel-box ${r.reputation}">
+      <div class="srow"><div class="sk">IP</div><div class="sv">${r.ip}</div></div>
+      <div class="srow"><div class="sk">Reputation</div><div class="sv" style="color:${colv}">${r.reputation.toUpperCase()}</div></div>
+      <div class="srow"><div class="sk">Country</div><div class="sv">${r.country}</div></div>
+      <div class="srow"><div class="sk">Abuse score</div><div class="sv">${r.abuse_score}/100</div></div>
+      <div class="srow"><div class="sk">Reports</div><div class="sv">${r.reports}</div></div>
+      <div class="srow"><div class="sk">Blocked</div><div class="sv ${r.blocked?'r':'g'}">${r.blocked?'YES':'NO'}</div></div>
+      <div style="margin-top:7px;color:var(--text2);font-size:11px">${r.note}</div>
+    </div>`;
+}
+function intelFrom(ip){go('intel',document.querySelectorAll('.nav')[3]);document.getElementById('intel-ip').value=ip;lookupIP()}
+
+async function blkManual(){const ip=document.getElementById('blk-ip').value||'';if(ip)await blkIP(ip)}
+async function blkIP(ip){
+  await fetch(`${API}/api/block-ip`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ip})});
+  blocked.add(ip);renderBlk();
+}
+async function fetchBlk(){
+  const s=await fetch(`${API}/api/stats`).then(r=>r.json()).catch(()=>({}));
+  (s.blocked_ip_list||[]).forEach(ip=>blocked.add(ip));
+  document.getElementById('s-blk').textContent=s.blocked_ips||blocked.size;
+  renderBlk();
+}
+function renderBlk(){
+  document.getElementById('blk-count').textContent=blocked.size;
+  document.getElementById('blk-list').innerHTML=[...blocked].map(ip=>`<span class="ip-tag">⊘ ${ip}</span>`).join('')||'<div style="color:var(--text3)">None yet</div>';
+}
+
+function go(id,el){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.nav').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('on');
+  if(el)el.classList.add('active');
+  if(id==='inc')renderTable();
+  if(id==='logs')renderLogPage();
+  if(id==='block')renderBlk();
+}
+
+connect();fetchBlk();setInterval(fetchBlk,15000);
+</script>
+</body>
+</html>

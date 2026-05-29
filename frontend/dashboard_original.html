@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SentinelAI — Cyber Threat Operations Center</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;900&family=Share+Tech+Mono&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg0: #0a0c10;
+    --bg1: #0f1218;
+    --bg2: #161b24;
+    --bg3: #1c2232;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --text: #e2e4e9;
+    --text2: #8b90a0;
+    --text3: #5a5f70;
+    --red: #e84545;
+    --red-dim: rgba(232,69,69,0.15);
+    --orange: #f0903a;
+    --orange-dim: rgba(240,144,58,0.15);
+    --blue: #4a9eff;
+    --blue-dim: rgba(74,158,255,0.12);
+    --green: #3dd68c;
+    --green-dim: rgba(61,214,140,0.12);
+    --purple: #a78bfa;
+    --purple-dim: rgba(167,139,250,0.12);
+    --cyan: #22d3ee;
+    --cyan-dim: rgba(34,211,238,0.1);
+  }
+
+  html, body {
+    background: var(--bg0);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  .app { display: flex; flex-direction: column; min-height: 100vh; padding: 12px; gap: 10px; }
+
+  /* ── HEADER ── */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--bg1);
+    border: 0.5px solid var(--border2);
+    border-radius: 10px;
+    padding: 12px 20px;
+  }
+
+  .logo {
+    font-family: 'Orbitron', monospace;
+    font-size: 18px; font-weight: 900; letter-spacing: 4px;
+    color: var(--text);
+  }
+  .logo .ai { color: var(--red); }
+
+  .header-status {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--text2); letter-spacing: 0.5px;
+  }
+
+  .pulse-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--green); flex-shrink: 0;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .header-right {
+    display: flex; align-items: center; gap: 24px;
+    font-size: 11px; font-family: 'Share Tech Mono', monospace;
+  }
+
+  .threat-level {
+    padding: 4px 12px; border-radius: 4px;
+    background: var(--orange-dim); color: var(--orange);
+    border: 0.5px solid rgba(240,144,58,0.3);
+    font-size: 10px; letter-spacing: 2px;
+  }
+
+  /* ── METRICS ── */
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+
+  .metric-card {
+    background: var(--bg1);
+    border: 0.5px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    position: relative; overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .metric-card:hover { border-color: var(--border2); }
+
+  .metric-card::after {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: var(--accent-color, transparent);
+  }
+
+  .metric-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px;
+    color: var(--text3); margin-bottom: 8px;
+  }
+  .metric-value {
+    font-family: 'Orbitron', monospace;
+    font-size: 28px; font-weight: 600;
+    color: var(--accent-color, var(--text));
+    line-height: 1;
+  }
+  .metric-delta { font-size: 11px; margin-top: 8px; color: var(--text3); }
+  .delta-bad { color: var(--red); }
+  .delta-good { color: var(--green); }
+  .delta-warn { color: var(--orange); }
+
+  /* ── MAIN GRID ── */
+  .main-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .panel {
+    background: var(--bg1);
+    border: 0.5px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    overflow: hidden;
+  }
+
+  .panel-title {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 2px;
+    color: var(--text3); margin-bottom: 14px;
+  }
+  .panel-bar { width: 3px; height: 12px; border-radius: 2px; flex-shrink: 0; }
+
+  /* ── THREAT FEED ── */
+  .threat-list { display: flex; flex-direction: column; gap: 0; }
+
+  .threat-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 9px 0;
+    border-bottom: 0.5px solid var(--border);
+    animation: fadedown 0.35s ease forwards;
+  }
+  .threat-item:last-child { border-bottom: none; }
+
+  @keyframes fadedown {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .sev {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px; font-weight: 600; letter-spacing: 0.5px;
+    padding: 3px 7px; border-radius: 3px;
+    white-space: nowrap; flex-shrink: 0; margin-top: 1px;
+  }
+  .sev-CRITICAL { background: var(--red-dim); color: var(--red); border: 0.5px solid rgba(232,69,69,0.3); }
+  .sev-HIGH     { background: var(--orange-dim); color: var(--orange); border: 0.5px solid rgba(240,144,58,0.3); }
+  .sev-MEDIUM   { background: var(--blue-dim); color: var(--blue); border: 0.5px solid rgba(74,158,255,0.2); }
+  .sev-LOW      { background: var(--green-dim); color: var(--green); border: 0.5px solid rgba(61,214,140,0.2); }
+
+  .threat-name { font-size: 12px; font-weight: 500; color: var(--text); margin-bottom: 2px; }
+  .threat-meta {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px; color: var(--text3);
+  }
+
+  /* ── CHART ── */
+  #attackChart { max-height: 190px; }
+
+  /* ── LOG VIEWER ── */
+  .log-wrap {
+    background: var(--bg1);
+    border: 0.5px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+
+  .log-stream { font-family: 'Share Tech Mono', monospace; font-size: 11px; }
+
+  .log-line {
+    display: flex; gap: 12px;
+    padding: 3px 0;
+    border-bottom: 0.5px solid rgba(255,255,255,0.04);
+    overflow: hidden;
+  }
+  .log-ts  { color: var(--text3); white-space: nowrap; flex-shrink: 0; }
+  .log-host {
+    color: var(--cyan); width: 108px; flex-shrink: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .log-msg  { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text2); }
+  .log-danger .log-msg { color: var(--red); }
+  .log-warn   .log-msg { color: var(--orange); }
+
+  /* ── BOTTOM GRID ── */
+  .bottom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* ── MITRE ATT&CK ── */
+  .mitre-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+
+  .mitre-cell {
+    padding: 8px 4px;
+    border-radius: 5px;
+    text-align: center;
+    font-size: 9px;
+    background: var(--bg2);
+    border: 0.5px solid var(--border);
+    color: var(--text3);
+    cursor: default;
+    transition: border-color 0.15s;
+  }
+  .mitre-cell:hover { border-color: var(--border2); }
+  .mitre-cell .mc-name { font-weight: 500; line-height: 1.3; }
+  .mitre-cell .mc-count { font-family: 'Share Tech Mono', monospace; font-size: 11px; margin-top: 3px; }
+
+  .mc-crit  { background: var(--red-dim);    color: var(--red);    border-color: rgba(232,69,69,0.25); }
+  .mc-high  { background: var(--orange-dim); color: var(--orange); border-color: rgba(240,144,58,0.25); }
+  .mc-med   { background: var(--blue-dim);   color: var(--blue);   border-color: rgba(74,158,255,0.2); }
+
+  /* ── AI ANALYST ── */
+  .ai-panel {
+    background: var(--bg1);
+    border: 0.5px solid rgba(74,158,255,0.2);
+    border-radius: 10px;
+    padding: 16px 18px;
+    position: relative; overflow: hidden;
+  }
+
+  .ai-panel::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: var(--blue);
+    opacity: 0.4;
+  }
+
+  .ai-badge {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 2px;
+    padding: 3px 8px; border-radius: 3px;
+    background: var(--blue-dim); color: var(--blue);
+    border: 0.5px solid rgba(74,158,255,0.25);
+  }
+
+  .ai-text {
+    font-size: 12px; line-height: 1.8;
+    color: var(--text2);
+    margin-top: 12px;
+    min-height: 100px;
+  }
+
+  .ai-cursor {
+    display: inline-block; width: 7px; height: 13px;
+    background: var(--blue); vertical-align: middle; margin-left: 1px;
+    animation: blink 1s step-end infinite;
+  }
+  @keyframes blink { 0%,49%{opacity:1} 50%,100%{opacity:0} }
+
+  /* ── STATUS BAR ── */
+  .status-bar {
+    background: var(--bg1);
+    border: 0.5px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 18px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px; color: var(--text3);
+  }
+
+  .status-items { display: flex; gap: 24px; }
+  .status-ok   { color: var(--green); }
+  .status-warn { color: var(--orange); }
+  .status-bad  { color: var(--red); }
+
+  /* Responsive tweaks */
+  @media (max-width: 900px) {
+    .metrics { grid-template-columns: repeat(2, 1fr); }
+    .main-grid, .bottom-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ─── HEADER ─── -->
+  <header class="header">
+    <div style="display:flex;align-items:center;gap:20px">
+      <span class="logo">SENTINEL<span class="ai">AI</span></span>
+      <span class="header-status">
+        <span class="pulse-dot"></span>
+        LIVE MONITORING · 847 SYSTEMS
+      </span>
+    </div>
+    <div class="header-right">
+      <span>THREAT LEVEL: <span class="threat-level">ELEVATED</span></span>
+      <span id="clock" style="color:var(--text3)">--:--:-- UTC</span>
+    </div>
+  </header>
+
+  <!-- ─── METRICS ─── -->
+  <div class="metrics">
+    <div class="metric-card" style="--accent-color: var(--red)">
+      <div class="metric-label">Threats Detected</div>
+      <div class="metric-value">2,847</div>
+      <div class="metric-delta delta-bad">↑ 23% past 24 hours</div>
+    </div>
+    <div class="metric-card" style="--accent-color: var(--red)">
+      <div class="metric-label">Critical Incidents</div>
+      <div class="metric-value" id="m-crit">14</div>
+      <div class="metric-delta delta-bad">3 new incidents this hour</div>
+    </div>
+    <div class="metric-card" style="--accent-color: var(--orange)">
+      <div class="metric-label">IPs Blocked</div>
+      <div class="metric-value" style="color:var(--orange)">1,293</div>
+      <div class="metric-delta delta-good">↓ 12 auto-resolved</div>
+    </div>
+    <div class="metric-card" style="--accent-color: var(--green)">
+      <div class="metric-label">Endpoints Online</div>
+      <div class="metric-value" style="color:var(--green)">847</div>
+      <div class="metric-delta delta-good">All agents reporting healthy</div>
+    </div>
+  </div>
+
+  <!-- ─── MAIN GRID ─── -->
+  <div class="main-grid">
+
+    <!-- Live Threat Feed -->
+    <div class="panel">
+      <div class="panel-title">
+        <span class="panel-bar" style="background:var(--red)"></span>
+        Live Threat Feed
+        <span class="pulse-dot" style="width:6px;height:6px;margin-left:4px"></span>
+      </div>
+      <div class="threat-list" id="threat-feed"></div>
+    </div>
+
+    <!-- Attack Chart -->
+    <div class="panel">
+      <div class="panel-title">
+        <span class="panel-bar" style="background:var(--blue)"></span>
+        Attack Distribution — Last 24h
+      </div>
+      <canvas id="attackChart"></canvas>
+    </div>
+
+  </div>
+
+  <!-- ─── LOG VIEWER ─── -->
+  <div class="log-wrap">
+    <div class="panel-title">
+      <span class="panel-bar" style="background:var(--text3)"></span>
+      Live Log Stream
+      <span style="margin-left:auto;font-family:'Share Tech Mono',monospace;color:var(--cyan);font-size:10px;letter-spacing:1px">● STREAMING</span>
+    </div>
+    <div class="log-stream" id="log-stream"></div>
+  </div>
+
+  <!-- ─── BOTTOM GRID ─── -->
+  <div class="bottom-grid">
+
+    <!-- MITRE ATT&CK -->
+    <div class="panel">
+      <div class="panel-title">
+        <span class="panel-bar" style="background:var(--orange)"></span>
+        MITRE ATT&amp;CK Heatmap
+        <span style="margin-left:auto;font-size:9px;letter-spacing:0.5px;color:var(--text3)">10 TACTICS MAPPED</span>
+      </div>
+      <div class="mitre-grid" id="mitre-grid"></div>
+    </div>
+
+    <!-- AI SOC Analyst -->
+    <div class="ai-panel">
+      <div class="panel-title" style="margin-bottom:0">
+        <span class="panel-bar" style="background:var(--blue)"></span>
+        AI SOC Analyst
+        <span class="ai-badge" style="margin-left:6px">GPT-4 · ACTIVE</span>
+        <span class="pulse-dot" style="width:6px;height:6px;margin-left:4px"></span>
+      </div>
+      <div class="ai-text" id="ai-text"></div>
+    </div>
+
+  </div>
+
+  <!-- ─── STATUS BAR ─── -->
+  <div class="status-bar">
+    <div class="status-items">
+      <span>KAFKA: <span class="status-ok">CONNECTED</span></span>
+      <span>ELASTICSEARCH: <span class="status-ok">HEALTHY</span></span>
+      <span>REDIS: <span class="status-ok">ACTIVE</span></span>
+      <span>VIRUSTOTAL API: <span class="status-warn">RATE LIMITED</span></span>
+      <span>ABUSEIPDB: <span class="status-ok">CONNECTED</span></span>
+    </div>
+    <span>SentinelAI v2.4.1 · IR Engine Active · <span id="event-count">12,847</span> events indexed</span>
+  </div>
+
+</div>
+
+<script>
+// ─── Clock ───
+(function tick(){
+  var el = document.getElementById('clock');
+  if(el) el.textContent = new Date().toLocaleTimeString('en-US', {hour12:false}) + ' UTC';
+  setTimeout(tick, 1000);
+})();
+
+// Event counter
+(function tickCount(){
+  var el = document.getElementById('event-count');
+  if(el){
+    var n = parseInt(el.textContent.replace(/,/g,''));
+    n += Math.floor(Math.random()*7)+1;
+    el.textContent = n.toLocaleString();
+  }
+  setTimeout(tickCount, 800);
+})();
+
+// ─── Threat Feed ───
+var THREATS = [
+  {s:'CRITICAL', t:'Ransomware Detected',     d:'WannaCry variant — SMBv1 exploit, payload modified', ip:'185.220.101.47', g:'RU'},
+  {s:'CRITICAL', t:'SQL Injection',           d:'Auth bypass on /api/login — UNION SELECT attack',    ip:'91.108.4.33',   g:'CN'},
+  {s:'HIGH',     t:'SSH Brute Force',         d:'847 auth attempts/min — threshold exceeded',         ip:'45.33.32.156',  g:'US'},
+  {s:'HIGH',     t:'Privilege Escalation',    d:'sudo exploit CVE-2023-4911 triggered, uid→0',        ip:'10.0.1.45',     g:'INT'},
+  {s:'MEDIUM',   t:'Port Scan',               d:'SYN stealth — all 65535 ports in 4.2 seconds',       ip:'194.165.16.7',  g:'NL'},
+  {s:'MEDIUM',   t:'Impossible Travel',       d:'Login: New York → Singapore in 12 minutes',          ip:'103.21.244.0',  g:'IN'},
+  {s:'HIGH',     t:'C2 Beacon Detected',      d:'Cobalt Strike — 10s heartbeat to 176.113.115.97',    ip:'176.113.115.97',g:'UA'},
+  {s:'CRITICAL', t:'Data Exfiltration',       d:'3.2GB outbound to unregistered host on port 443',    ip:'45.142.212.100',g:'DE'},
+  {s:'HIGH',     t:'Reflected XSS',           d:'Active exploitation in /search?q= parameter',        ip:'5.188.210.8',   g:'RU'},
+  {s:'LOW',      t:'Policy Violation',        d:'Unauthorized USB mass storage device attached',       ip:'10.0.5.22',     g:'INT'},
+];
+
+var tIdx = 0;
+var feedEl = document.getElementById('threat-feed');
+
+function addThreat(){
+  var t = THREATS[tIdx % THREATS.length]; tIdx++;
+  var now = new Date().toLocaleTimeString('en-US', {hour12:false});
+  var d = document.createElement('div');
+  d.className = 'threat-item';
+  d.innerHTML =
+    '<span class="sev sev-' + t.s + '">' + t.s + '</span>' +
+    '<div>' +
+      '<div class="threat-name">' + t.t + '</div>' +
+      '<div class="threat-meta">' + now + ' · ' + t.ip + ' [' + t.g + '] · ' + t.d + '</div>' +
+    '</div>';
+  feedEl.insertBefore(d, feedEl.firstChild);
+  while(feedEl.children.length > 7) feedEl.removeChild(feedEl.lastChild);
+}
+for(var i=0;i<7;i++) addThreat();
+setInterval(addThreat, 3500);
+
+// ─── Chart ───
+new Chart(document.getElementById('attackChart').getContext('2d'), {
+  type: 'bar',
+  data: {
+    labels: ['SQL Inj', 'Brute Force', 'Malware', 'Port Scan', 'XSS', 'Phishing', 'Ransomware'],
+    datasets: [{
+      data: [342, 891, 234, 567, 189, 423, 47],
+      backgroundColor: ['#c0392b','#d35400','#27ae60','#2980b9','#8e44ad','#16a085','#922b21'],
+      borderRadius: 5,
+      borderSkipped: false,
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: {
+        grid: { color: 'rgba(255,255,255,0.05)' },
+        ticks: { color: '#5a5f70', font: { size: 10, family: "'Share Tech Mono', monospace" } }
+      },
+      y: {
+        grid: { color: 'rgba(255,255,255,0.05)' },
+        ticks: { color: '#5a5f70', font: { size: 10, family: "'Share Tech Mono', monospace" } }
+      }
+    }
+  }
+});
+
+// ─── Log Stream ───
+var LOGS = [
+  {h:'web-prod-01',   m:'GET /admin/../../etc/passwd HTTP/1.1 200 [PATH TRAVERSAL BLOCKED]', c:'danger'},
+  {h:'db-server-03',  m:'Authentication failure for user admin from 10.0.1.45 — attempt 847', c:'warn'},
+  {h:'firewall-edge', m:'BLOCK 185.220.101.47:4444 > 10.0.0.1:443 REASON=C2_BEACON_DETECTED', c:'danger'},
+  {h:'endpoint-w42',  m:'Process: powershell.exe -enc JABzAHQAcgBpAG4AZwAgJwB4A [SUSPICIOUS]', c:'warn'},
+  {h:'k8s-node-07',   m:'Privilege escalation attempt in pod webapp-3 uid=1000 -> uid=0',     c:'danger'},
+  {h:'siem-core',     m:'Correlation rule BRUTE_SSH_THRESHOLD fired: 847 attempts/60s from 1 src', c:'warn'},
+  {h:'auth-svc',      m:'2FA bypass attempt for admin@corp.com via OTP reuse [BLOCKED+ALERT]', c:'danger'},
+  {h:'cdn-edge-02',   m:'DDoS mitigation activated: 45,312 req/s scrubbed from 3 source ASNs', c:'warn'},
+  {h:'cloud-monitor', m:'IAM anomaly: 142 S3 GetObject calls from new geo — ap-southeast-1',  c:'warn'},
+  {h:'edr-agent-51',  m:'Process injection attempt: explorer.exe <- malware.dll [QUARANTINED]', c:'danger'},
+];
+var lIdx = 0;
+var logEl = document.getElementById('log-stream');
+
+function addLog(){
+  var e = LOGS[lIdx % LOGS.length]; lIdx++;
+  var now = new Date().toLocaleTimeString('en-US', {hour12:false});
+  var div = document.createElement('div');
+  div.className = 'log-line' + (e.c === 'danger' ? ' log-danger' : e.c === 'warn' ? ' log-warn' : '');
+  div.innerHTML =
+    '<span class="log-ts">' + now + '</span>' +
+    '<span class="log-host">' + e.h + '</span>' +
+    '<span class="log-msg">' + e.m + '</span>';
+  logEl.insertBefore(div, logEl.firstChild);
+  while(logEl.children.length > 6) logEl.removeChild(logEl.lastChild);
+}
+for(var i=0;i<6;i++) addLog();
+setInterval(addLog, 1800);
+
+// ─── MITRE ATT&CK ───
+var MITRE = [
+  {n:'Initial Access', c:3},  {n:'Execution', c:5},      {n:'Persistence', c:2},
+  {n:'Priv Escalation',c:4},  {n:'Defense Evasion', c:3},{n:'Cred Access', c:6},
+  {n:'Discovery', c:2},       {n:'Lateral Movement',c:1},{n:'Collection', c:3},
+  {n:'Exfiltration', c:2},
+];
+var mg = document.getElementById('mitre-grid');
+MITRE.forEach(function(t){
+  var d = document.createElement('div');
+  var cls = t.c >= 5 ? 'mc-crit' : t.c >= 3 ? 'mc-high' : t.c >= 1 ? 'mc-med' : '';
+  d.className = 'mitre-cell ' + cls;
+  d.innerHTML = '<div class="mc-name">' + t.n + '</div><div class="mc-count">' + t.c + '</div>';
+  mg.appendChild(d);
+});
+
+// ─── AI SOC Analyst ───
+var AI_MSGS = [
+  '[CRITICAL] Ransomware confirmed on WIN-PROD-07. Endpoint isolated from network segment. WannaCry variant (modified payload) exploiting unpatched SMBv1. 3 additional endpoints exhibit matching C2 beacon patterns — IOC confirmed in AlienVault OTX.\n\nAuto-response executed: firewall rules pushed to edge, affected accounts suspended, IR ticket #2847 created. Recommend emergency SMBv1 disable across entire Windows fleet.',
+  '[HIGH] Brute-force campaign from 14 IPs in 185.220.0.0/16 (confirmed Tor exit nodes). Pattern consistent with automated credential stuffing using leaked combo list (estimated 3.2M entries from recent breach).\n\nActions taken: 14 source IPs blocked at perimeter, rate limiting applied to /api/auth endpoint, CAPTCHA threshold reduced to 3 failures. No successful authentications confirmed at this time.',
+  '[SUMMARY] Threat activity +23% vs prior 24h window. Primary attack vectors: SSH brute-force (41%), SQL injection (18%), malware C2 (12%), port scanning (8%). Highest-risk assets: web-prod-01 (5 active alerts), db-server-03 (3 active alerts).\n\nUrgent recommendation: Apply patch for CVE-2023-4911 on 3 unpatched Linux endpoints — severity HIGH, CVSS 7.8.',
+];
+
+var ai = 0, ac = 0, acur = '', ae = document.getElementById('ai-text');
+
+function typeAI(){
+  if(ac < acur.length){
+    var ch = acur[ac++];
+    ae.innerHTML = acur.slice(0, ac).replace(/\n/g,'<br>') + '<span class="ai-cursor"></span>';
+    setTimeout(typeAI, ch === '.' ? 60 : ch === ',' ? 40 : ch === '\n' ? 120 : 22);
+  } else {
+    ae.innerHTML = acur.replace(/\n/g,'<br>');
+    setTimeout(function(){
+      ai = (ai+1) % AI_MSGS.length;
+      acur = AI_MSGS[ai]; ac = 0; ae.innerHTML = '';
+      typeAI();
+    }, 6000);
+  }
+}
+acur = AI_MSGS[0];
+typeAI();
+</script>
+</body>
+</html>
