@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # SentinelAI — Cyber Threat Detection Platform
 
 AI-powered SOC platform: real-time threat detection, automated incident response, live dashboard.
@@ -130,3 +131,6 @@ sentinelai/
 4. Dashboard updates in real time via WebSocket
 
 In demo mode (no agents connected), the backend simulates realistic attacks every 3–8 seconds so you can see everything working immediately.
+=======
+# SentinelAI
+>>>>>>> 06786c9759a5be15ba7af6263dc31175034f62ed
