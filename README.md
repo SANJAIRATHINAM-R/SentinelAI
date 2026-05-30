@@ -139,4 +139,4 @@ sentinelai/
 In demo mode (no agents connected), the backend simulates realistic attacks every 3–8 seconds so you can see everything working immediately.
 =======
 # SentinelAI
->>>>>>> 06786c9759a5be15ba7af6263dc31175034f62ed
+Author: MAHALAKSHMI.V AND SANJAIRATHINAM.R
